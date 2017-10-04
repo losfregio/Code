@@ -1,0 +1,10 @@
+assets
+interval
+48h
+load dataset
+01/01/2012 until today
+export
+
+https://enactonpower.energyict.com/insight
+Login: npower_SALVADORACHAIZQUIERDO
+password: s3Xa2t
