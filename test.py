@@ -12,11 +12,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 
-conn = sqlite3.connect('.\\Sainsburys.sqlite')
-cur = conn.cursor()   
-
-
-
 store_index = 723
 problem_id = pb.CHPproblem(store_index)
 
