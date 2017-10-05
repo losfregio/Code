@@ -51,7 +51,7 @@ class CHPproblem:
     # the first 2 aren't even optimisations (only last uses Pyomo to optimise
     # CHP operation) - TODO: add Pyomo!
     
-    def SimpleOpti5NPV(self, method = None, tech_range = None, time_start = None, time_stop = None, table_string = None, ECA_value = 0, uncertainty = None):
+    def SimpleOpti5NPV(self, method = None, tech_range = None, time_start = None, time_stop = None, table_string = None, ECA_value = 0, uncertainty = None, mod = [1,1,1,1]):
         if time_start is not None or time_stop is not None or table_string is not None:
             if time_start is not None:
                 self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
@@ -94,9 +94,9 @@ class CHPproblem:
                 methodToRun = 1
             if methodToRun == 1:        
                 if uncertainty is not None:
-                    results = self.SimpleOptiControl(tech_id = tech_id, uncertainty = uncertainty)  
+                    results = self.SimpleOptiControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
                 else:    
-                    results = self.SimpleOptiControl(tech_id = tech_id)  
+                    results = self.SimpleOptiControl(tech_id = tech_id, mod = mod)  
             elif methodToRun == 2:
                 results = self.LoadFollowControl(tech_id = tech_id)  
             elif methodToRun == 3:
@@ -122,6 +122,7 @@ class CHPproblem:
             tot_OPTI_cost  = -np.npv(discount_rate, np.array([year_cost]*NPV_years))
             tot_BAU_cost = -np.npv(discount_rate, np.array([year_BAU_cost]*NPV_years)) 
             savings = tot_OPTI_cost - tot_BAU_cost
+            Com_disc_cash_flow = -Total_capex + 9.13*year_savings
          
             # Check if this is the optimum technology
             if savings > optimal_savings:
@@ -132,7 +133,7 @@ class CHPproblem:
                 opti_CHPQI = CHPQI
                 
         
-        return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI)
+        return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI, Com_disc_cash_flow)
     
     
     
@@ -229,7 +230,7 @@ class CHPproblem:
 
     # Find the optimal part load of tech. time start and time stop need to be passed as datetime objects
     # Return operational cost (BAU and Optimised) and part load for each interval
-    def SimpleOptiControl(self, tech_id = None, time_start = None, time_stop = None, table_string=None, uncertainty = [0,0,0], CHPQI_IO = None):
+    def SimpleOptiControl(self, tech_id = None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None, CHPQI_IO = None):
         
         if time_start is not None or time_stop is not None or table_string is not None:
             if time_start is not None:
@@ -243,26 +244,16 @@ class CHPproblem:
         
         ##########  MAIN CODE #######    
         ## get all data        
-        u_el = np.random.normal(1,uncertainty[0]/2)
-        u_a_el = np.random.normal(1,uncertainty[1]/2)
-        u_gas = np.random.normal(1,uncertainty[2]/2)   
         
         if tech_id is not None:
             self.putTech(tech_id)
         if hasattr(self, 'tech') == False:
             raise Exception("tech not initialized") 
-        Boiler_eff = self.boiler_eff; CHPQI_threshold = self.CHPQI_threshold          
-        a_fuel = self.tech.a_fuel;  b_fuel = self.tech.b_fuel; a_el = self.tech.a_el; b_el = self.tech.b_el; a_th =  self.tech.a_th; b_th = self.tech.b_th; psi_min = self.tech.psi_min; parasitic_load =  self.tech.parasitic_load;  mant_costs = self.tech.mant_costs   
+        CHPQI_threshold = self.CHPQI_threshold          
         
-        el_price = self.store.p_ele*u_el
-        el_price_exp = self.store.p_ele_exp
-        gas_price = (self.store.p_gas + mant_costs)*u_gas
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
-        el_demand = self.store.d_ele                             ##  kWel HH  ##
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2*u_a_el; a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
+        [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
+        [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
+        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -287,11 +278,12 @@ class CHPproblem:
         part_load = PL[np.arange(PL.shape[0]),np.argmin(op_cost_HH,axis = 1)]
         
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load)
+        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
         BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
-        CHPQI  = self.calculate_CHPQI(part_load)        
-
+       
+        CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty)        
+        
         mask000 = part_load > 0.01
         mask011 = (a_el*part_load+b_el)*mask000>el_demand
         mask012 = (a_th*part_load+b_th)*mask000 > th_demand   
@@ -307,7 +299,7 @@ class CHPproblem:
         CHPQI = el_efficiency_tot*238+th_efficiency_tot*120
         op_cost_HH= op_cost_HH_pound*100
         BAU_op_cost_HH= BAU_op_cost_HH_pound*100 
-        
+       
         #enforcing CHPQI in case         
         if CHPQI_IO is not None:
             if CHPQI_IO == 1:
@@ -383,12 +375,15 @@ class CHPproblem:
 #                                print('operational_cost:', sum(op_cost_HH)/100)
                             niter = niter + 1
                             count = count + 1
-
-        return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI)
+        
+        mask000 = part_load > 0                    
+        fuel_cons = (a_fuel*part_load+b_fuel)
+        gas_price                    
+        return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI,fuel_cons, gas_price)
 
         
         #find the part load of tech and cost considering a CHP which follows the load
-    def LoadFollowControl(self, tech_id= None, time_start = None, time_stop = None, table_string=None, uncertainty = [0,0,0]):
+    def LoadFollowControl(self, tech_id= None, time_start = None, time_stop = None, table_string=None, mod = [1,1,1,1], uncertainty = [0,0,0]):
         if time_start is not None or time_stop is not None or table_string is not None:
             if time_start is not None:
                 self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
@@ -399,27 +394,14 @@ class CHPproblem:
             self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
             self.store.getSimpleDemand(self.time_start, self.time_stop)            
 
-        ##########  MAIN CODE #######    
-        ## get all data        
-        #u_el = np.random.normal(1,uncertainty[0]/2)
-        #u_a_el = np.random.normal(1,uncertainty[1]/2)
-        #u_gas = np.random.normal(1,uncertainty[2]/2)   
         
         if tech_id is not None:
             self.putTech(tech_id)
-        if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized") 
-        Boiler_eff = self.boiler_eff;         
-        a_fuel = self.tech.a_fuel;  b_fuel = self.tech.b_fuel; a_el = self.tech.a_el; b_el = self.tech.b_el; a_th =  self.tech.a_th; b_th = self.tech.b_th; psi_min = self.tech.psi_min; parasitic_load =  self.tech.parasitic_load;  mant_costs = self.tech.mant_costs   
-        
-        el_price = self.store.p_ele
-        gas_price = (self.store.p_gas + mant_costs)
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
-        el_demand = self.store.d_ele                             ##  kWel HH  ##
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2; a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
+
+            
+        [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
+        [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
+        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -435,10 +417,10 @@ class CHPproblem:
                     part_load[count] = psi_el[count]
 
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load)
+        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
         BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
-        CHPQI  = self.calculate_CHPQI(part_load) 
+        CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
 
         return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI)
     
@@ -446,7 +428,7 @@ class CHPproblem:
     
     
         #find the part load of tech and cost considering a CHP which follows the load and is turned on only during trading hours
-    def LoadFollowControlOnOff(self, tech_id= None, time_start = None, time_stop = None, table_string=None):
+    def LoadFollowControlOnOff(self, tech_id= None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None):
         if time_start is not None or time_stop is not None or table_string is not None:
             if time_start is not None:
                 self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
@@ -465,19 +447,12 @@ class CHPproblem:
         
         if tech_id is not None:
             self.putTech(tech_id)
-        if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized") 
-        Boiler_eff = self.boiler_eff; timestamp = self.store.timestamp        
-        a_fuel = self.tech.a_fuel;  b_fuel = self.tech.b_fuel; a_el = self.tech.a_el; b_el = self.tech.b_el; a_th =  self.tech.a_th; b_th = self.tech.b_th; psi_min = self.tech.psi_min; parasitic_load =  self.tech.parasitic_load;  mant_costs = self.tech.mant_costs   
+
+        timestamp = self.store.timestamp      
         
-        el_price = self.store.p_ele
-        gas_price = (self.store.p_gas + mant_costs)
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
-        el_demand = self.store.d_ele                             ##  kWel HH  ##
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2; a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
+        [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
+        [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
+        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -520,19 +495,52 @@ class CHPproblem:
                 part_load[count] = 0        
                 
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load)
+        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
         BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
-        CHPQI  = self.calculate_CHPQI(part_load) 
+        CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
         
 
         return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI)
     
- 
+    #calculate  data to be used in the models
+    def calculate_data(self, mod = None, uncertainty = None):
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized")       
+        
+        if mod is None:
+            mod = [1,1,1,1]
+        if uncertainty is None:
+            uncertainty = [0,0,0]
+        
+        Boiler_eff = self.boiler_eff           
+        a_fuel = self.tech.a_fuel*mod[2]
+        b_fuel = self.tech.b_fuel*mod[2]
+        a_el = self.tech.a_el
+        b_el = self.tech.b_el
+        a_th =  self.tech.a_th
+        b_th = self.tech.b_th
+        psi_min = self.tech.psi_min    
+        parasitic_load =  self.tech.parasitic_load 
+        mant_costs = self.tech.mant_costs   
+        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
+        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2;a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
+        ## need also to subtract the parasitic load form the CHP electricity production ##
+        b_el = b_el-parasitic_load
+        tech_data = [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]
+   
+        el_price = self.store.p_ele*mod[0]
+        el_price_exp = self.store.p_ele_exp
+        gas_price = (self.store.p_gas + mant_costs)*mod[1]
+        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
+        el_demand = self.store.d_ele                             ##  kWel HH  ##
+        utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand]
+     
+        return(tech_data, utility_data)
     
     
     ## get the operating cost from the part load
-    def calculate_op_cost(self, part_load, tech_id = None, time_start = None, time_stop = None, table_string=None):        
+    def calculate_op_cost(self, part_load, tech_id = None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None):        
         if time_start is not None or time_stop is not None or table_string is not None:
             if time_start is not None:
                 self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
@@ -548,29 +556,17 @@ class CHPproblem:
             
         if tech_id is not None:
             self.putTech(tech_id)
-        if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized")
- 
-        Boiler_eff = self.boiler_eff
-           
-        a_fuel = self.tech.a_fuel;  b_fuel = self.tech.b_fuel;  a_el = self.tech.a_el; b_el = self.tech.b_el; a_th =  self.tech.a_th; b_th = self.tech.b_th; psi_min = self.tech.psi_min
+
+
+        [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
+        [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
+        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+
         check_psi = np.array(part_load)
         check_psi[check_psi == 0] = 1
         if min(check_psi)< (psi_min):
             raise Exception("part load less than minimum part load")      
-        parasitic_load =  self.tech.parasitic_load 
-        mant_costs = self.tech.mant_costs   
-   
-        el_price = self.store.p_ele
-        el_price_exp = self.store.p_ele_exp
-        gas_price = self.store.p_gas + mant_costs
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
-        el_demand = self.store.d_ele                             ##  kWel HH  ##
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2;a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
-        
+
         mask000 = part_load > 0.01
         mask011 = (a_el*part_load+b_el)*mask000 > el_demand
         mask012 = (a_th*part_load+b_th)*mask000 > th_demand   
@@ -582,7 +578,7 @@ class CHPproblem:
     
     
     ## get the CHPQI from the part load
-    def calculate_CHPQI(self, part_load, tech_id = None, time_start = None, time_stop = None):     
+    def calculate_CHPQI(self, part_load, tech_id = None, time_start = None, time_stop = None, mod=None, uncertainty=None):     
         if time_start is not None or time_stop is not None:
             if time_start is not None:
                 self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
@@ -594,22 +590,15 @@ class CHPproblem:
             raise Exception("part load length do not match size of other vector")        
         if tech_id is not None:
             self.putTech(tech_id)
-        if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized")
+
+        [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
+        [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
+        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
         
-        #input tech data
-        Boiler_eff = self.boiler_eff; a_fuel = self.tech.a_fuel; b_fuel = self.tech.b_fuel; a_el = self.tech.a_el; b_el = self.tech.b_el; a_th =  self.tech.a_th; b_th = self.tech.b_th; psi_min = self.tech.psi_min; parasitic_load =  self.tech.parasitic_load 
-       
         check_psi = np.array(part_load)
         check_psi[check_psi == 0] = 1
         if min(check_psi)< (psi_min):
             raise Exception("part load less than minimum part load")   
-            
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##    
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2;a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
             
         mask000 = part_load > 0.01
         el_utilisation = (a_el*part_load+b_el)*mask000
@@ -703,6 +692,7 @@ class CHPproblem:
         cur = conn.cursor()
         cur.execute('''SELECT * FROM Technologies WHERE id=?''', (tech_id,))
         dummy = cur.fetchall()
+        
         
         # Explanation for these variables is given in Pyomo model below
         a_fuel = dummy[0][3]
