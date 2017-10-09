@@ -12,6 +12,7 @@ import Common.classTech as tc
 import Solvers.classCHPProblem as pb
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
 
 
 database_path = ".\\Sainsburys.sqlite"
