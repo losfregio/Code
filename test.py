@@ -1,30 +1,19 @@
 # -*- coding: utf-8 -*-
 """
-Created on Mon Oct  2 10:50:55 2017
+Created on Mon Oct  9 16:11:30 2017
 
 @author: nl211
 """
 
 import sqlite3
 import Common.classStore as st
+import Common.classTech as tc
 import Solvers.classCHPProblem as pb
 import numpy as np
 import matplotlib.pyplot as plt
 
 
-store_index = 693
-problem_id = pb.CHPproblem(store_index)
+id = 693
+pb = pb.CHPproblem(id)
 
-mod = [1,2,1,1]
-
-sol = problem_id.SimpleOptiControl(tech_id = 15, mod = mod)
-
-op_cost = sum(sol[0])
-op_cost_new = sum(sol[1])
-print(op_cost)
-print(op_cost_new)
-
-print(sol[5])
-print(sum(sol[4]))
-
-##new line test github
+pb.SebastianControl(15)

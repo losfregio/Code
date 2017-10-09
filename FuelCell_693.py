@@ -27,39 +27,48 @@ problem_id = pb.CHPproblem(store_index)
 mod = [1,1,1,1]
 mod_gas = 1
 mod_ele = 1
-mod_fuel = 1
+#mod_fuel = 100
+discount_rate = 0.0
 
-cash_flow = -1100
+cash_flow = -1600
 RP_FC  = np.append(RP_FC, cash_flow) 
+ncount = 0
 for year_item in range(0,20):
-    sol = problem_id.SimpleOptiControl(tech_id = 21, mod = mod)
-    opex_savings = sum(sol[0])-sum(sol[1])
+    sol = problem_id.SimpleOptiControl(tech_id = 21, mod = mod)#, table_string =  'Utility_Prices_Aitor_NoGasCCL')
+    opex_savings = (sum(sol[0])-sum(sol[1]))/((1+discount_rate )**(year_item+1))
     print(opex_savings)
     cash_flow = cash_flow +  opex_savings/1000
     RP_FC  = np.append(RP_FC, cash_flow)
     mod_gas = mod_gas*1.02
-    mod_ele = mod_gas*1.04
+    mod_ele = mod_ele*1.04
     if year_item == 10:
-        mod_fuel = 1
-    else:    
-        mod_fuel = mod_fuel*(1+0.009)
+        ncount = 0
+    mod_fuel = (1+0.009)**ncount
     mod = [mod_gas, mod_ele, mod_fuel, 1]
+    ncount = ncount + 1
+
+print("CHP")
+mod = [1,1,1,1]
+mod_gas = 1
+mod_ele = 1
+mod_fuel = 1
+
 
 cash_flow = -910
 RP_CHP  = np.append(RP_CHP, cash_flow) 
 for year_item in range(0,20):
-    sol = problem_id.SimpleOptiControl(tech_id = 17, mod = mod)
-    opex_savings = sum(sol[0])-sum(sol[1])
+    sol = problem_id.SimpleOptiControl(tech_id = 17, mod = mod)#, table_string =  'Utility_Prices_Aitor_NoGasCCL')
+    opex_savings = (sum(sol[0])-sum(sol[1]))/((1+discount_rate )**(year_item+1))
     print(opex_savings)
     cash_flow = cash_flow +  opex_savings/1000
     RP_CHP  = np.append(RP_CHP, cash_flow)
     mod_gas = mod_gas*1.02
-    mod_ele = mod_gas*1.04
+    mod_ele = mod_ele*1.04
     if year_item == 10:
-        mod_fuel = 1
-    else:    
-        mod_fuel = mod_fuel*(1+0.009)
+        ncount = 0
+    mod_fuel = (1+0.009)**ncount
     mod = [mod_gas, mod_ele, mod_fuel, 1]
+    ncount = ncount + 1
 
 
 
@@ -81,13 +90,17 @@ for year_item in range(0,20):
 #
 
 #
-plt.xlabel('Case #')
-plt.ylabel('Payback Time, [years]')
-plt.axis([0, 20, -1500, 3000])
+f = plt.figure()
+plt.xlabel('years')
+plt.ylabel('Discounted Cash flow, [k£]')
+plt.axis([0, 20, -2000, 3000])
+ax = f.add_subplot(111)
+ax.yaxis.tick_right()
+ax.tick_params(labelleft=True, labelright=True)
 plt.plot(RP_FC,  label = 'Fuel Cell')   
 plt.plot(RP_CHP,  label = 'Combustion Engine')  
 
-legend = plt.legend(loc='lower left')
+legend = plt.legend(loc='lower right')
 
 #
 #plt.xlabel('Case #')

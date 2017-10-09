@@ -49,10 +49,10 @@ for store_index in range(id_store_min, id_store_max ):
         if goodIO == 1:
             problem_id = pb.CHPproblem(store_index)
             problem_id.hidden_costs = 400000
-            results = problem_id.SimpleOpti5NPV(method = 1, tech_range = [21], table_string = 'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26, mod =  mod)
+            results = problem_id.SimpleOpti5NPV(method = 1, tech_range = [21], mod = [1,1,1,1], table_string = 'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26)
             results2 = problem_id.SimpleOpti5NPV(method = 1, tech_range = [17], mod =  mod)
             CHPQI = results2[4]
-            if CHPQI > 170:
+            if CHPQI > 150:
                 results2 = problem_id.SimpleOpti5NPV(method = 1, tech_range = [17], table_string = 'Utility_Prices_Aitor_NoGasCCL',  ECA_value = 0.26, mod =  mod)
             
             diff = results[3] - results2[3]
@@ -68,7 +68,7 @@ for store_index in range(id_store_min, id_store_max ):
                 RP_case = np.append(RP_case,store_index)
                 RP_FC  = np.append(RP_FC, results[3])
                 RP_FC_cash  = np.append(RP_FC_cash, results[5])
-                if CHPQI > 170:
+                if CHPQI > 150:
                     RP_CHP_G = np.append(RP_CHP_G, results2[3])
                     RP_CHP  = np.append(RP_CHP,[np.nan])
                 else:
@@ -81,14 +81,14 @@ for store_index in range(id_store_min, id_store_max ):
 
 
 
-plt.xlabel('Case #')
-plt.ylabel('Payback Time, [years]')
-plt.axis([500, 800, 0, 10])
-plt.plot(RP_case, RP_FC, 'ro', label = 'Fuel Cell')   
-plt.plot(RP_case, RP_CHP, 'bo' , label = 'CHP bad CHPQI') 
-plt.plot(RP_case, RP_CHP_G, 'go' , label = 'CHP good CHPQI') 
-
-legend = plt.legend(loc='lower left')
+#plt.xlabel('Case #')
+#plt.ylabel('Payback Time, [years]')
+#plt.axis([500, 800, 0, 10])
+#plt.plot(RP_case, RP_FC, 'ro', label = 'Fuel Cell')   
+#plt.plot(RP_case, RP_CHP, 'bo' , label = 'CHP bad CHPQI') 
+#plt.plot(RP_case, RP_CHP_G, 'go' , label = 'CHP good CHPQI') 
+#
+#legend = plt.legend(loc='lower left')
 
 plt.xlabel('Case #')
 plt.ylabel('Cumulative Discounted Cash Flow, [£]')

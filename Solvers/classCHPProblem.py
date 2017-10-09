@@ -51,17 +51,15 @@ class CHPproblem:
     # the first 2 aren't even optimisations (only last uses Pyomo to optimise
     # CHP operation) - TODO: add Pyomo!
     
-    def SimpleOpti5NPV(self, method = None, tech_range = None, time_start = None, time_stop = None, table_string = None, ECA_value = 0, uncertainty = None, mod = [1,1,1,1]):
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)            
-    
+    def SimpleOpti5NPV(self, method = None, tech_range = None, time_start = None, time_stop = None, table_string = None, ECA_value = 0, uncertainty = None, mod = None):
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string)            
+        if tech_range is not None:
+            array_tech = tech_range
+        else:
+            array_tech = range(1,20)    
+            
         NPV_years = 5 
         hidden_costs = self.hidden_costs
         financial_lifetime = self.financial_lifetime
@@ -72,12 +70,7 @@ class CHPproblem:
         optimal_savings = -1000000
         opti_tech = -1
         opti_tech_name = 'None'
-
-        
-        if tech_range is not None:
-            array_tech = tech_range
-        else:
-            array_tech = range(13,20)
+       
         for id_tech_index in array_tech: 
             
             tech_id = id_tech_index
@@ -93,16 +86,13 @@ class CHPproblem:
             else:
                 methodToRun = 1
             if methodToRun == 1:        
-                if uncertainty is not None:
-                    results = self.SimpleOptiControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
-                else:    
-                    results = self.SimpleOptiControl(tech_id = tech_id, mod = mod)  
+                results = self.SimpleOptiControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
             elif methodToRun == 2:
-                results = self.LoadFollowControl(tech_id = tech_id)  
+                results = self.LoadFollowControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
             elif methodToRun == 3:
                 results = self.SebastianControl(tech_id)
             elif methodToRun == 4:
-                results = self.LoadFollowControlOnOff(tech_id = tech_id)
+                results = self.LoadFollowControlOnOff(tech_id = tech_id, uncertainty = uncertainty, mod = mod)
             else:
                 print("Method chosen is wrong")
                 raise ValueError
@@ -122,7 +112,7 @@ class CHPproblem:
             tot_OPTI_cost  = -np.npv(discount_rate, np.array([year_cost]*NPV_years))
             tot_BAU_cost = -np.npv(discount_rate, np.array([year_BAU_cost]*NPV_years)) 
             savings = tot_OPTI_cost - tot_BAU_cost
-            Com_disc_cash_flow = -Total_capex + 9.13*year_savings
+            Cum_disc_cash_flow = -Total_capex + 9.13*year_savings
          
             # Check if this is the optimum technology
             if savings > optimal_savings:
@@ -131,24 +121,21 @@ class CHPproblem:
                 optimal_savings = savings
                 opti_payback = payback
                 opti_CHPQI = CHPQI
-                
         
-        return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI, Com_disc_cash_flow)
+        #restore previous values        
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)
+        
+        return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI, Cum_disc_cash_flow)
     
     
     
     
     # find the the best technology considering the CHPQI benefits and assuming advanced control strategies
     def CHPQIOpti5NPV(self, tech_range = None, time_start = None, time_stop = None, table_string = None, uncertainty = None):
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)            
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string)          
     
         NPV_years = 5 
         hidden_costs = self.hidden_costs
@@ -224,31 +211,25 @@ class CHPproblem:
                 optimal_savings = savings
                 opti_payback = payback 
                 opti_CHPQI = CHPQI
-                
+
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)          
         
         return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI)    
 
     # Find the optimal part load of tech. time start and time stop need to be passed as datetime objects
     # Return operational cost (BAU and Optimised) and part load for each interval
     def SimpleOptiControl(self, tech_id = None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None, CHPQI_IO = None):
-        
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)            
-        
-        ##########  MAIN CODE #######    
-        ## get all data        
-        
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string)           
         if tech_id is not None:
             self.putTech(tech_id)
         if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized") 
+            raise Exception("tech not initialized")         
+
+        ##########  MAIN CODE #######    
+        ## get all data        
         CHPQI_threshold = self.CHPQI_threshold          
         
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
@@ -375,29 +356,21 @@ class CHPproblem:
 #                                print('operational_cost:', sum(op_cost_HH)/100)
                             niter = niter + 1
                             count = count + 1
-        
-        mask000 = part_load > 0                    
-        fuel_cons = (a_fuel*part_load+b_fuel)
-        gas_price                    
-        return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI,fuel_cons, gas_price)
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table) 
+            
+        return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI) 
 
         
         #find the part load of tech and cost considering a CHP which follows the load
     def LoadFollowControl(self, tech_id= None, time_start = None, time_stop = None, table_string=None, mod = [1,1,1,1], uncertainty = [0,0,0]):
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)            
-
-        
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string)          
         if tech_id is not None:
             self.putTech(tech_id)
-
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized")  
             
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
@@ -422,6 +395,9 @@ class CHPproblem:
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
         CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
 
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)  
+            
         return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI)
     
     
@@ -429,25 +405,15 @@ class CHPproblem:
     
         #find the part load of tech and cost considering a CHP which follows the load and is turned on only during trading hours
     def LoadFollowControlOnOff(self, tech_id= None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None):
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)            
-            
-        ##########  MAIN CODE #######    
-        ## get all data        
-        #u_el = np.random.normal(1,uncertainty[0]/2)
-        #u_a_el = np.random.normal(1,uncertainty[1]/2)
-        #u_gas = np.random.normal(1,uncertainty[2]/2)   
-        
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string)       
         if tech_id is not None:
             self.putTech(tech_id)
-
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized") 
+            
+        ### MAIN CODE    
         timestamp = self.store.timestamp      
         
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
@@ -500,63 +466,23 @@ class CHPproblem:
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
         CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
         
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)         
 
         return(BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI)
-    
-    #calculate  data to be used in the models
-    def calculate_data(self, mod = None, uncertainty = None):
-        if hasattr(self, 'tech') == False:
-            raise Exception("tech not initialized")       
         
-        if mod is None:
-            mod = [1,1,1,1]
-        if uncertainty is None:
-            uncertainty = [0,0,0]
-        
-        Boiler_eff = self.boiler_eff           
-        a_fuel = self.tech.a_fuel*mod[2]
-        b_fuel = self.tech.b_fuel*mod[2]
-        a_el = self.tech.a_el
-        b_el = self.tech.b_el
-        a_th =  self.tech.a_th
-        b_th = self.tech.b_th
-        psi_min = self.tech.psi_min    
-        parasitic_load =  self.tech.parasitic_load 
-        mant_costs = self.tech.mant_costs   
-        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
-        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2;a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
-        ## need also to subtract the parasitic load form the CHP electricity production ##
-        b_el = b_el-parasitic_load
-        tech_data = [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]
-   
-        el_price = self.store.p_ele*mod[0]
-        el_price_exp = self.store.p_ele_exp
-        gas_price = (self.store.p_gas + mant_costs)*mod[1]
-        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
-        el_demand = self.store.d_ele                             ##  kWel HH  ##
-        utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand]
-     
-        return(tech_data, utility_data)
-    
     
     ## get the operating cost from the part load
-    def calculate_op_cost(self, part_load, tech_id = None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None):        
-        if time_start is not None or time_stop is not None or table_string is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
-            if table_string is not None:
-                self.price_table = table_string       
-            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
-            self.store.getSimpleDemand(self.time_start, self.time_stop)    
-            
+    def calculate_op_cost(self, part_load, tech_id = None, time_start = None, time_stop = None, table_string=None, mod=None, uncertainty=None):               
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop;  old_price_table = self.price_table
+                self.putUtility(time_start =time_start, time_stop = time_stop, table_string=table_string) 
         if len(part_load) != len(self.store.p_ele):
-            raise Exception("part load length do not match size of other vector")
-            
+            raise Exception("part load length do not match size of other vector")            
         if tech_id is not None:
             self.putTech(tech_id)
-
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized") 
 
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
@@ -573,24 +499,25 @@ class CHPproblem:
         op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
         op_cost_HH_pound= op_cost_HH /100
 
+        if time_start is not None or time_stop is not None or table_string is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)
+                
         return(op_cost_HH_pound)
 
     
     
     ## get the CHPQI from the part load
-    def calculate_CHPQI(self, part_load, tech_id = None, time_start = None, time_stop = None, mod=None, uncertainty=None):     
-        if time_start is not None or time_stop is not None:
-            if time_start is not None:
-                self.time_start = int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)
-            if time_stop is not None:
-                self.time_stop = int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                    
-            self.store.getSimpleDemand(self.time_start, self.time_stop)    
-               
+    def calculate_CHPQI(self, part_load, tech_id = None, time_start = None, time_stop = None, mod=None, uncertainty=None):  
+        if time_start is not None or time_stop is not None: 
+                old_time_start = self.time_start; old_time_stop = self.time_stop
+                self.putUtility(time_start =time_start, time_stop = time_stop)                           
         if len(part_load) != len(self.store.p_ele):
             raise Exception("part load length do not match size of other vector")        
         if tech_id is not None:
             self.putTech(tech_id)
-
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized") 
+            
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
         [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
@@ -613,13 +540,65 @@ class CHPproblem:
             el_efficiency_tot = el_tot_utilisation/fuel_tot_utilisation 
             th_efficiency_tot =th_tot_utilisation/fuel_tot_utilisation
             CHPQI = el_efficiency_tot*238+th_efficiency_tot*120
+            
+        if time_start is not None or time_stop is not None: 
+                self.putUtility(time_start =old_time_start, time_stop = old_time_stop)    
+            
         return(CHPQI)
+    
+    
+        #calculate  data to be used in the models
+    def calculate_data(self, mod = None, uncertainty = None):
+        if hasattr(self, 'tech') == False:
+            raise Exception("tech not initialized")              
+        if mod is None:
+            mod = [1,1,1,1]
+        if uncertainty is None:
+            uncertainty = [0,0,0]
+        
+        #Factor to convert consumption given in LHV to HHV
+        K_fuel = 1 #39.8/36 (the value is already implemented in the technology used)
+        
+        Boiler_eff = self.boiler_eff           
+        a_fuel = self.tech.a_fuel*mod[2]*K_fuel
+        b_fuel = self.tech.b_fuel*mod[2]*K_fuel
+        a_el = self.tech.a_el
+        b_el = self.tech.b_el
+        a_th =  self.tech.a_th
+        b_th = self.tech.b_th
+        psi_min = self.tech.psi_min    
+        parasitic_load =  self.tech.parasitic_load 
+        mant_costs = self.tech.mant_costs   
+        ## convert CHP data from kW to kWh (for every HH) by dividing by 2 ##
+        parasitic_load = parasitic_load/2; a_fuel = a_fuel/2;a_el = a_el/2;a_th = a_th/2;b_fuel = b_fuel/2;b_el = b_el/2;b_th = b_th /2
+        ## need also to subtract the parasitic load form the CHP electricity production ##
+        b_el = b_el-parasitic_load
+        tech_data = [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]
+   
+        el_price = self.store.p_ele*mod[0]
+        el_price_exp = self.store.p_ele_exp
+        gas_price = (self.store.p_gas + mant_costs)*mod[1]
+        th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
+        el_demand = self.store.d_ele                             ##  kWel HH  ##
+        utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand]
+        return(tech_data, utility_data)
 
     ## initialise a technology 
     def putTech(self, tech_id): 
         self.tech = tc.tech(tech_id)
 
-
+    def putUtility(self, time_start = None, time_stop = None, table_string=None): 
+        if time_start is not None or time_stop is not None or table_string is not None:
+            if time_start is not None:
+                self.time_start = time_start#int((time_start-datetime.datetime(1970,1,1)).total_seconds()/60/30)  # changed for simplicity
+            if time_stop is not None:
+                self.time_stop = time_stop#int((time_stop-datetime.datetime(1970,1,1)).total_seconds()/60/30)                
+            if table_string is not None:
+                self.price_table = table_string       
+            self.store.getSimplePrice(self.time_start, self.time_stop, self.price_table)
+            self.store.getSimpleDemand(self.time_start, self.time_stop)   
+        else:
+             raise Exception("no inputs.. doing nothing")
 
        
     def dat_file(self, file_name, E_demand, Q_demand, e_imp, e_exp, q, tech):

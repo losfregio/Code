@@ -35,10 +35,7 @@ class tech:
         except ValueError: 
             print("Cannot retrieve store data")
             
-        #Factor to convert consumption given in LHV to HHV
-        K_fuel = 39.8/36
-        self.a_fuel = self.a_fuel*K_fuel
-        self.b_fuel = self.b_fuel*K_fuel
+
         conn.commit()    
         
         
