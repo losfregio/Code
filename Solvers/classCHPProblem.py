@@ -40,7 +40,7 @@ class CHPproblem:
         self.store.getSimpleDemand(self.time_start, self.time_stop)
         self.boiler_eff = 0.87
         self.hidden_costs = 353000
-        self.financial_lifetime = 15
+        #self.financial_lifetime = 15
         self.discount_rate = 0.09
         self.CHPQI_threshold = 105
 
@@ -59,74 +59,64 @@ class CHPproblem:
             array_tech = tech_range
         else:
             array_tech = range(1,20)    
-            
-        NPV_years = 5 
+                    
         hidden_costs = self.hidden_costs
-        financial_lifetime = self.financial_lifetime
         discount_rate =  self.discount_rate                 
-        conn = sqlite3.connect(database_path)
-        cur = conn.cursor()
         
-        optimal_savings = -1000000
+        optimal_objective = -1000000
         opti_tech = -1
         opti_tech_name = 'None'
        
-        for id_tech_index in array_tech: 
-            
+        for id_tech_index in array_tech:
             tech_id = id_tech_index
-            
-            cur.execute('''SELECT * FROM Technologies WHERE id=?''', (tech_id,))
-            dummy = cur.fetchall()
-            tech_name = dummy[0][1]
-            tech_price = dummy[0][2]            
-            tech_price = tech_price*(1-ECA_value)
+            self.putTech(tech_id)
+            tech_name = self.tech.tech_name
+            tech_price = self.tech.tech_price*(1-ECA_value)          
+            tech_lifetime = self.tech.lifetime            
             
             if method is not None:
                 methodToRun = method
             else:
                 methodToRun = 1
             if methodToRun == 1:        
-                results = self.SimpleOptiControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
+                [BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI] = self.SimpleOptiControl(uncertainty = uncertainty, mod = mod)  
             elif methodToRun == 2:
-                results = self.LoadFollowControl(tech_id = tech_id, uncertainty = uncertainty, mod = mod)  
+                [BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI] = self.LoadFollowControl(uncertainty = uncertainty, mod = mod)  
             elif methodToRun == 3:
-                results = self.SebastianControl(tech_id)
+                [BAU_op_cost_HH_pound, op_cost_HH_pound, opti_CHPQI , CHPQI] = self.SebastianControl(tech_id)
             elif methodToRun == 4:
-                results = self.LoadFollowControlOnOff(tech_id = tech_id, uncertainty = uncertainty, mod = mod)
+                [BAU_op_cost_HH_pound, op_cost_HH_pound, part_load, CHPQI] = self.LoadFollowControlOnOff(uncertainty = uncertainty, mod = mod)
             else:
                 print("Method chosen is wrong")
                 raise ValueError
-            
-            year_BAU_cost = sum(results[0])
-            year_op_cost = sum(results[1])
-            CHPQI = results[3]
-             # Calculate annualised CAPEX
+
+            # Calculate finantial
             numb_years = (self.time_stop-self.time_start)/2/24/365
-            year_op_cost = year_op_cost/numb_years
-            year_BAU_cost = year_BAU_cost/numb_years
-            year_savings = year_BAU_cost - year_op_cost 
-            Total_capex = tech_price+hidden_costs 
-            payback = Total_capex/year_savings
-            ann_capex = -np.pmt(discount_rate, financial_lifetime, Total_capex)
-            year_cost = year_op_cost  + ann_capex
-            tot_OPTI_cost  = -np.npv(discount_rate, np.array([year_cost]*NPV_years))
-            tot_BAU_cost = -np.npv(discount_rate, np.array([year_BAU_cost]*NPV_years)) 
-            savings = tot_OPTI_cost - tot_BAU_cost
-            Cum_disc_cash_flow = -Total_capex + 9.13*year_savings
-         
+            year_op_cost = sum(op_cost_HH_pound)/numb_years
+            year_BAU_cost = sum(BAU_op_cost_HH_pound)/numb_years
+            Total_capex = tech_price + hidden_costs            
+            [year_savings, payback, NPV5savings, ROI, Cum_disc_cash_flow] = self.calculate_financials(discount_rate, tech_lifetime, year_BAU_cost, year_op_cost, Total_capex)
+            
+            objective = NPV5savings
             # Check if this is the optimum technology
-            if savings > optimal_savings:
+            if objective > optimal_objective:
                 opti_tech = id_tech_index
                 opti_tech_name = tech_name
-                optimal_savings = savings
-                opti_payback = payback
                 opti_CHPQI = CHPQI
+                opti_part_load = part_load
+                optimal_objective = objective
+                opti_year_savings = year_savings
+                opti_payback = payback
+                opti_NPV5savings = NPV5savings
+                opti_ROI = ROI
+                opti_Cum_disc_cash_flow = Cum_disc_cash_flow
+
         
         #restore previous values        
         if time_start is not None or time_stop is not None or table_string is not None: 
                 self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)
         
-        return(opti_tech, opti_tech_name, optimal_savings, opti_payback, opti_CHPQI, Cum_disc_cash_flow)
+        return(opti_tech, opti_tech_name, opti_CHPQI, opti_part_load, opti_year_savings, opti_payback, opti_NPV5savings, opti_ROI, opti_Cum_disc_cash_flow)
     
     
     
@@ -259,9 +249,7 @@ class CHPproblem:
         part_load = PL[np.arange(PL.shape[0]),np.argmin(op_cost_HH,axis = 1)]
         
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
-        BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
-        BAU_op_cost_HH_pound = BAU_op_cost_HH/100
+        [op_cost_HH_pound, BAU_op_cost_HH_pound]  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
        
         CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty)        
         
@@ -390,9 +378,7 @@ class CHPproblem:
                     part_load[count] = psi_el[count]
 
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
-        BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
-        BAU_op_cost_HH_pound = BAU_op_cost_HH/100
+        [op_cost_HH_pound, BAU_op_cost_HH_pound]  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
         CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
 
         if time_start is not None or time_stop is not None or table_string is not None: 
@@ -461,9 +447,8 @@ class CHPproblem:
                 part_load[count] = 0        
                 
         ## calcualte outputs
-        op_cost_HH_pound  = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
-        BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
-        BAU_op_cost_HH_pound = BAU_op_cost_HH/100
+        
+        [op_cost_HH_pound, BAU_op_cost_HH_pound ] = self.calculate_op_cost(part_load, mod = mod, uncertainty = uncertainty)
         CHPQI  = self.calculate_CHPQI(part_load, mod = mod, uncertainty = uncertainty) 
         
         if time_start is not None or time_stop is not None or table_string is not None: 
@@ -498,11 +483,13 @@ class CHPproblem:
         mask012 = (a_th*part_load+b_th)*mask000 > th_demand   
         op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
         op_cost_HH_pound= op_cost_HH /100
-
+        BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
+        BAU_op_cost_HH_pound = BAU_op_cost_HH/100
+        
         if time_start is not None or time_stop is not None or table_string is not None: 
                 self.putUtility(time_start =old_time_start, time_stop = old_time_stop, table_string=old_price_table)
                 
-        return(op_cost_HH_pound)
+        return(op_cost_HH_pound, BAU_op_cost_HH_pound)
 
     
     
@@ -582,6 +569,20 @@ class CHPproblem:
         el_demand = self.store.d_ele                             ##  kWel HH  ##
         utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand]
         return(tech_data, utility_data)
+    
+    def calculate_financials(self, discount_rate, tech_lifetime, year_BAU_cost, year_op_cost, Total_capex):
+            year_savings = year_BAU_cost - year_op_cost
+            payback = Total_capex/year_savings           
+            ann_capex = -np.pmt(discount_rate, tech_lifetime, Total_capex)            
+            year_cost = year_op_cost  + ann_capex
+            NPV5_op_cost  = -np.npv(discount_rate, np.array([year_cost]*5))
+            NPV5_BAU_cost = -np.npv(discount_rate, np.array([year_BAU_cost]*5)) 
+            NPV5savings = NPV5_op_cost - NPV5_BAU_cost
+            ROI = year_savings/Total_capex
+            Const = (1-(1+discount_rate)**(-tech_lifetime))/discount_rate            
+            Cum_disc_cash_flow = -Total_capex + Const*year_savings 
+            return(year_savings, payback, NPV5savings, ROI, Cum_disc_cash_flow)
+    
 
     ## initialise a technology 
     def putTech(self, tech_id): 

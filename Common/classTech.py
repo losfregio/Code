@@ -32,6 +32,10 @@ class tech:
             self.psi_min = dummy[0][9]
             self.parasitic_load = dummy[0][10]
             self.mant_costs = dummy[0][11]
+            self.lifetime = dummy[0][12]
+            self.tech_name = dummy[0][1]
+            self.tech_price = dummy[0][2]
+            
         except ValueError: 
             print("Cannot retrieve store data")
             

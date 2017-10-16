@@ -54,7 +54,7 @@ for store_index in range(id_store_min, id_store_max ):
                
                
             #get demand    
-            cur.execute('''SELECT Ele FROM Demand Where Stores_id= ? AND Time_id > ? AND Time_id < ? ''', (store_index, time_start-1, time_stop))
+            cur.execute('''SELECT Gas FROM Demand Where Stores_id= ? AND Time_id > ? AND Time_id < ? ''', (store_index, time_start-1, time_stop))
             Raw_data = cur.fetchall()
             Ele = np.array([elt[0] for elt in Raw_data])
             
@@ -72,8 +72,8 @@ cat1_avg = np.average(cat1, axis = 0)
 
 plt.xlabel('')
 plt.ylabel('Ele demand')
-plt.axis([0, 300, 0, 200])
-plt.plot(cat1_avg, 'ro', label = 'cat1')   
+plt.axis([0, 100, 0, 200])
+plt.plot(Ele, 'ro', label = 'cat1')   
 
 
 
