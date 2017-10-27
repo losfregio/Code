@@ -72,11 +72,11 @@ for year_item in range(0,20):
     ncount = ncount + 1
     
 mod = [1,1,1,1]
-problem_id.hidden_costs = 333000
-print(problem_id.SimpleOpti5NPV(tech_range = [21], mod = mod, table_string =  'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26))
-problem_id.hidden_costs = 400000
-print(problem_id.SimpleOpti5NPV(tech_range = [17], mod = mod))
-print(problem_id.SimpleOpti5NPV(tech_range = [17], mod = mod, table_string =  'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26))
+#problem_id.hidden_costs = 333000
+#print(problem_id.SimpleOpti5NPV(tech_range = [21], mod = mod, table_string =  'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26))
+#problem_id.hidden_costs = 400000
+#print(problem_id.SimpleOpti5NPV(tech_range = [17], mod = mod))
+#print(problem_id.SimpleOpti5NPV(tech_range = [17], mod = mod, table_string =  'Utility_Prices_Aitor_NoGasCCL', ECA_value = 0.26))
 
 #
 f = plt.figure()

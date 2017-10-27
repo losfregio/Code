@@ -224,7 +224,7 @@ class CHPproblem:
         
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
-        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+        [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -245,7 +245,7 @@ class CHPproblem:
         mask000 = PL > 0.01
         mask011 = (a_el*PL+b_el)*mask000>el_demand.reshape(len(el_demand),1)
         mask012 = (a_th*PL+b_th)*mask000 > th_demand.reshape(len(th_demand),1)   
-        op_cost_HH = (a_fuel*PL+b_fuel)*mask000*gas_price.reshape(len(gas_price),1) +(el_demand.reshape(len(el_demand),1) -(a_el*PL+b_el)*mask000)*(1-mask011)*el_price.reshape(len(el_price),1) + (th_demand.reshape(len(th_demand),1) - (a_th*PL+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price.reshape(len(gas_price),1) - ((a_el*PL+b_el)*mask000-el_demand.reshape(len(el_demand),1) )*(mask011)*el_price_exp.reshape(len(el_price_exp),1)
+        op_cost_HH = (a_fuel*PL+b_fuel)*mask000*gas_price_CHP.reshape(len(gas_price_CHP),1) +(el_demand.reshape(len(el_demand),1) -(a_el*PL+b_el)*mask000)*(1-mask011)*el_price.reshape(len(el_price),1) + (th_demand.reshape(len(th_demand),1) - (a_th*PL+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price.reshape(len(gas_price),1) - ((a_el*PL+b_el)*mask000-el_demand.reshape(len(el_demand),1) )*(mask011)*el_price_exp.reshape(len(el_price_exp),1)
         part_load = PL[np.arange(PL.shape[0]),np.argmin(op_cost_HH,axis = 1)]
         
         ## calcualte outputs
@@ -302,7 +302,7 @@ class CHPproblem:
                             
                             new_mask011 = (a_el*new_part_load+b_el)*new_mask000>el_demand
                             new_mask012 = (a_th*new_part_load+b_th)*new_mask000 > th_demand   
-                            new_op_cost_HH = (a_fuel*new_part_load+b_fuel)*new_mask000*gas_price +(el_demand-(a_el*new_part_load+b_el)*new_mask000)*(1-new_mask011)*el_price + (th_demand - (a_th*new_part_load+b_th)*new_mask000)*(1-new_mask012)/Boiler_eff*gas_price - ((a_el*new_part_load+b_el)*new_mask000-el_demand)*(new_mask011)*el_price_exp
+                            new_op_cost_HH = (a_fuel*new_part_load+b_fuel)*new_mask000*gas_price_CHP +(el_demand-(a_el*new_part_load+b_el)*new_mask000)*(1-new_mask011)*el_price + (th_demand - (a_th*new_part_load+b_th)*new_mask000)*(1-new_mask012)/Boiler_eff*gas_price - ((a_el*new_part_load+b_el)*new_mask000-el_demand)*(new_mask011)*el_price_exp
                            
                             D_CHPQI_el = np.divide(el_tot_utilisation,fuel_tot_utilisation) - np.divide((el_tot_utilisation - D_el_utilisation),(fuel_tot_utilisation-D_fuel_utilisation)) 
                             D_CHPQI_th = np.divide(th_tot_utilisation,fuel_tot_utilisation) - np.divide((th_tot_utilisation - D_th_utilisation),(fuel_tot_utilisation-D_fuel_utilisation)) 
@@ -333,7 +333,7 @@ class CHPproblem:
                                 niter = 100000
                                 new_CHPQI = - 1000
                             CHPQI = new_CHPQI
-                            op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
+                            op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price_CHP +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
                             BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
                             op_cost_HH_pound = op_cost_HH /100
                             BAU_op_cost_HH_pound = BAU_op_cost_HH/100 
@@ -362,7 +362,7 @@ class CHPproblem:
             
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
-        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+        [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -404,7 +404,7 @@ class CHPproblem:
         
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
-        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+        [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP] = utility_data
         
         ## calculate optimum part load    
         psi_el = (el_demand - b_el)/a_el
@@ -471,7 +471,7 @@ class CHPproblem:
 
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
-        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+        [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP] = utility_data
 
         check_psi = np.array(part_load)
         check_psi[check_psi == 0] = 1
@@ -481,7 +481,7 @@ class CHPproblem:
         mask000 = part_load > 0.01
         mask011 = (a_el*part_load+b_el)*mask000 > el_demand
         mask012 = (a_th*part_load+b_th)*mask000 > th_demand   
-        op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
+        op_cost_HH = (a_fuel*part_load+b_fuel)*mask000*gas_price_CHP +(el_demand-(a_el*part_load+b_el)*mask000)*(1-mask011)*el_price + (th_demand - (a_th*part_load+b_th)*mask000)*(1-mask012)/Boiler_eff*gas_price - ((a_el*part_load+b_el)*mask000-el_demand)*(mask011)*el_price_exp
         op_cost_HH_pound= op_cost_HH /100
         BAU_op_cost_HH = el_demand*el_price + th_demand/Boiler_eff*gas_price 
         BAU_op_cost_HH_pound = BAU_op_cost_HH/100
@@ -507,7 +507,7 @@ class CHPproblem:
             
         [tech_data, utility_data] = self.calculate_data(mod = mod, uncertainty = uncertainty)
         [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]  = tech_data  
-        [el_price, el_price_exp, gas_price, th_demand, el_demand] = utility_data
+        [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP] = utility_data
         
         check_psi = np.array(part_load)
         check_psi[check_psi == 0] = 1
@@ -561,13 +561,15 @@ class CHPproblem:
         ## need also to subtract the parasitic load form the CHP electricity production ##
         b_el = b_el-parasitic_load
         tech_data = [Boiler_eff, a_fuel, b_fuel, a_el, b_el, a_th,  b_th, psi_min, parasitic_load, mant_costs]
-   
+        el_efficiency = (a_el+b_el)/(a_fuel+b_fuel)
+        
         el_price = self.store.p_ele*mod[0]
         el_price_exp = self.store.p_ele_exp
-        gas_price = (self.store.p_gas + mant_costs)*mod[1]
+        gas_price = self.store.p_gas*mod[1]
+        gas_price_CHP = (self.store.p_gas + mant_costs*el_efficiency*100)*mod[1]
         th_demand = self.store.d_gas*Boiler_eff                  ##  kWth HH  ##
         el_demand = self.store.d_ele                             ##  kWel HH  ##
-        utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand]
+        utility_data = [el_price, el_price_exp, gas_price, th_demand, el_demand, gas_price_CHP]
         return(tech_data, utility_data)
     
     def calculate_financials(self, discount_rate, tech_lifetime, year_BAU_cost, year_op_cost, Total_capex):

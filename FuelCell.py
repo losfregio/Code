@@ -53,7 +53,7 @@ for store_index in range(id_store_min, id_store_max ):
             problem_id.hidden_costs = 400000
             results2 = problem_id.SimpleOpti5NPV(method = 1, tech_range = [17], mod =  mod)
             CHPQI = results2[2]
-            if CHPQI > 109.5:
+            if CHPQI > 105:
                 results2 = problem_id.SimpleOpti5NPV(method = 1, tech_range = [17], table_string = 'Utility_Prices_Aitor_NoGasCCL',  ECA_value = 0.26, mod =  mod)
             
 #            diff = results[3] - results2[3]
@@ -69,7 +69,7 @@ for store_index in range(id_store_min, id_store_max ):
                 RP_case = np.append(RP_case,store_index)
                 RP_FC  = np.append(RP_FC, results[5])
                 #RP_FC_cash  = np.append(RP_FC_cash, results[5])
-                if CHPQI > 109.5:
+                if CHPQI > 105:
                     RP_CHP_G = np.append(RP_CHP_G, results2[5])
                     RP_CHP  = np.append(RP_CHP,[np.nan])
                 else:
