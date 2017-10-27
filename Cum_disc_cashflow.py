@@ -10,7 +10,7 @@ from mpl_toolkits.mplot3d import Axes3D
 
 database_path = ".\\Sainsburys.sqlite"
 conn = sqlite3.connect(database_path)
-#cur = conn.cursor()
+cur = conn.cursor()
 
 print("my version")
 
