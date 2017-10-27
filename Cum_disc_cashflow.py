@@ -12,6 +12,8 @@ database_path = ".\\Sainsburys.sqlite"
 conn = sqlite3.connect(database_path)
 cur = conn.cursor()
 
+print("my version")
+
 id_store_min = 0
 id_store_max = 3000
 CHP_cat1, CHP_cat2, CHP_cat3 = ([] for i in range(3))

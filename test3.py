@@ -22,5 +22,5 @@ store_index = 2010
 p_id = pb.CHPproblem(store_index)
 
 sol = p_id.SimpleOpti5NPV()
-
+print(sol[1])
 print(sol[8])
