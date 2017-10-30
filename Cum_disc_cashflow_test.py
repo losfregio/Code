@@ -17,6 +17,7 @@ id_store_max = 3000
 store1, store2, store3 = ([] for i in range(3))
 financials1, financials2, financials3 = ([] for i in range(3))
 carbon1, carbon2, carbon3 = ([] for i in range(3))
+
 for id_store in range(id_store_min, id_store_max ):
     goodIO = 0
     cur.execute('''SELECT Ele, Gas FROM Demand_Check Where Stores_id= {vn1}'''.format(vn1=id_store))
@@ -65,44 +66,21 @@ for id_store in range(id_store_min, id_store_max ):
                 carbon3.append(solution[5][2])
                 store3.append(id_store)
 
-'''plt.figure(1)
-plt.plot(store1, financials1, 'ro', label='cat1')
-plt.plot(store2, financials2, 'bo', label='cat2')
-plt.plot(store3, financials3, 'go', label='cat3')
+plt.figure(1)
+plt.plot(store1, financials1, 'ro', label='<25000 $ft^2$')
+plt.plot(store2, financials2, 'bo', label='25000-45000 $ft^2$')
+plt.plot(store3, financials3, 'go', label='>45000 $ft^2$')
+plt.xlabel('store id')
+plt.ylabel('£ savings (cumul discounted cashflow)  2016-17')
+plt.tight_layout()
 plt.legend()
-plt.show()
 
 plt.figure(2)
-
-plt.plot(store1, carbon1, 'ro', label='cat1')
-plt.plot(store2, carbon2, 'bo', label='cat2')
-plt.plot(store3, carbon3, 'go', label='cat3')
+plt.plot(store1, carbon1, 'ro', label='<25000 $ft^2$')
+plt.plot(store2, carbon2, 'bo', label='25000-45000 $ft^2$')
+plt.plot(store3, carbon3, 'go', label='>45000 $ft^2$')
+plt.xlabel('store id')
+plt.ylabel('carbon savings $tCO_2$ 2016-17')
 plt.legend()
-plt.show()'''
-
-MAC = [-np.average(financials1)/abs(np.average(carbon1)),
-       -np.average(financials2)/abs(np.average(carbon2)),
-       -np.average(financials3)/abs(np.average(carbon3))]
-
-average1 = np.average(carbon1)
-average2 = np.average(carbon2)
-average3 = np.average(carbon3)
-print(average1, average2, average3)
-
-width = [average1, average2, average3]
-cum_width = np.cumsum(width)
-ind = [width[0]/2, (cum_width[1]-cum_width[0])/2+cum_width[0], (cum_width[2]-cum_width[1])/2+cum_width[1]]
-
-plt.figure(3)
-p1 = plt.bar(ind, MAC, width, linewidth=1, edgecolor='black')
-plt.xlabel('$tCO_2e$ savings')
-plt.ylabel('$£/tCO_2e$')
-plt.title('MAC curves for each store category and CHP implementation 2016-17')
-plt.show()
-
-rects = p1.patches
-labels = ['Category 1', 'Category 2', 'Category 3']
-for rect, label in zip(rects, labels):
-    height = rect.get_height()
-    p1.text(rect.get_x() + rect.get_width()/2, height + 5, label, ha='center', va='bottom')
+plt.tight_layout()
 plt.show()
